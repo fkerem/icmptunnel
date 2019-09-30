@@ -21,6 +21,7 @@
 #include <pthread.h>
 #include <arpa/inet.h>
 #include <unistd.h>
+#include <netinet/ip.h>
 
 
 #define DEFAULT_ROUTE   "0.0.0.0"
@@ -57,7 +58,7 @@ int tun_alloc(char *dev, int flags)
     exit(EXIT_FAILURE);
   }
 
-  printf("[DEBUG] Allocatating tunnel2");
+  printf("[DEBUG] Allocatating tunnel2\n");
 
   printf("[DEBUG] Created tunnel %s\n", dev);
 
@@ -237,7 +238,12 @@ void run_tunnel(char *dest, int server)
       memset(&packet, 0, sizeof(struct icmp_packet));
       receive_icmp_packet(sock_fd, &packet);
 
-      printf("[DEBUG] Read ICMP packet with src: %s, dest: %s, payload_size: %d, payload: %s\n", packet.src_addr, packet.dest_addr, packet.payload_size, packet.payload);
+      printf("[DEBUG] Read ICMP packet with src: %s, dest: %s, payload_size: %d, payload hdr_ver:IPv%d, payload: %s\n", packet.src_addr, packet.dest_addr, packet.payload_size, ((struct iphdr*)packet.payload)->version, packet.payload);
+      if (((struct iphdr*)packet.payload)->version != 4) { // not illegal ipv4 packet
+          printf("[WARN] illegal packet version : ipv%d. should be 4 or 6\n", ((struct iphdr*)packet.payload)->version);
+          free(packet.payload);
+          continue;
+      }
       // Writing out to tun device
       tun_write(tun_fd, packet.payload, packet.payload_size);
 
