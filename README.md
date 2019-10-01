@@ -2,6 +2,15 @@
 
 > Transparently tunnel your IP traffic through ICMP echo and reply packets.
 
+## changelog (history detail in changelog)
+### 20191001
+* 增加handshake握手机制，确保两个peer之间通信不受其他包的干扰
+* 两个端通信，增加token校验后方可握手成功
+* icmp打包增加id和seq保留，以便可以顺利回包回来
+* 自动回复非tunnel icmp包的功能（后面又临时屏蔽了, 有127回环问题要解决一下）
+* 一些debug log
+* readme 使用说明修改
+
 'icmptunnel' works by encapsulating your IP traffic in ICMP echo packets and sending them to your own proxy server. The proxy server decapsulates the packet and forwards the IP traffic. The incoming IP packets which are destined for the client are again encapsulated in ICMP reply packets and sent back to the client. The IP traffic is sent in the 'data' field of ICMP packets.
 
 [RFC 792](http://www.ietf.org/rfc/rfc792.txt), which is IETF's rules governing ICMP packets, allows for an arbitrary data length for any type 0 (echo reply) or 8 (echo message) ICMP packets.
@@ -42,10 +51,18 @@ _Note: Although icmptunnel has been successfully tested on Ubuntu 14.04 LTS, it 
   make
   ```
 
-4. On the server side run the tunnel with root privileges:
+4. On the server side run the tunnel with root privileges: （修改了，增加了token校验和握手,详见上方changelog）
 
   ```
-  [sudo] ./icmptunnel -s 10.0.1.1
+:> ./icmptunnel
+  Wrong argument
+    usage: icmptunnel <-s|-c> serverip token
+    -s: server mode
+    -c: client mode
+    serverip: the server side internet ip address. in server mode, can be 0.0.0.0
+    token: to identify client and server, and match them. len(token) < 128 Bytes
+
+:> sudo ./icmptunnel -s 0.0.0.0 "here-is-your-token-any-string-is-ok"
   ```
 
 5. On the client side, find out your gateway and the corresponding interface:
@@ -62,10 +79,10 @@ _Note: Although icmptunnel has been successfully tested on Ubuntu 14.04 LTS, it 
 
 6. Check the DNS server at client side. Make sure it does not use any server not accessible by our proxy server. One suggestion is to use `8.8.8.8`(Google's DNS server) which will be accessible to the proxy server. You would need to edit your DNS settings for this. *You might need to manually delete the route for your local DNS server from your routing table.*
 
-7. Run the tunnel on your client with root privileges:
+7. Run the tunnel on your client with root privileges: （修改了，增加了token校验和握手，详见changelog）
 
   ```
-  [sudo] ./icmptunnel -c <server>
+  :> sudo ./icmptunnel -c <server ip> "here-is-your-token-any-string-is-ok" #token需要和server参数中一致
   ```
 
 The tunnel should run and your client machine should be able to access the internet. All traffic will be tunneled through ICMP.

@@ -8,6 +8,7 @@
 // Maximum transmission unit
 #define MTU 1472
 
+#include <stdint.h>
 struct icmp_packet
 {
   char src_addr[100];
@@ -15,6 +16,8 @@ struct icmp_packet
   int type;
   char *payload;
   int payload_size;
+  uint16_t id;
+  uint16_t seq;
 };
 
 /**
@@ -47,6 +50,7 @@ void send_icmp_packet(int sock_fd, struct icmp_packet *packet_details);
  */
 void receive_icmp_packet(int sock_fd, struct icmp_packet *packet_details);
 
+void reply_icmp(int sock_fd, struct icmp_packet *packet_details);
 /**
  * Function to close the icmp socket
  */

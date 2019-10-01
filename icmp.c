@@ -20,7 +20,7 @@ uint16_t in_cksum(uint16_t *addr, int len);
 /**
  * Function to fill up common headers for IP and ICMP
  */
-void prepare_headers(struct iphdr *ip, struct icmphdr *icmp);
+void prepare_headers(struct iphdr *ip, struct icmphdr *icmp, uint16_t id, uint16_t seq);
 
 /**
  * Function to set packet type as ECHO
@@ -114,7 +114,7 @@ void send_icmp_packet(int sock_fd, struct icmp_packet *packet_details)
   icmp = (struct icmphdr *)(packet + sizeof(struct iphdr));
   icmp_payload = (char *)(packet + sizeof(struct iphdr) + sizeof(struct icmphdr));
 
-  prepare_headers(ip, icmp);
+  prepare_headers(ip, icmp, packet_details->id, packet_details->seq);
 
   ip->tot_len = htons(packet_size);
   ip->saddr = src_addr.s_addr;
@@ -173,6 +173,8 @@ void receive_icmp_packet(int sock_fd, struct icmp_packet *packet_details)
   icmp_payload = (char *)(packet + sizeof(struct iphdr) + sizeof(struct icmphdr));
 
   // Filling up packet_details
+  packet_details->id = icmp->un.echo.id;
+  packet_details->seq = icmp->un.echo.sequence;
   inet_ntop(AF_INET, &(ip->saddr), packet_details->src_addr, INET_ADDRSTRLEN);
   inet_ntop(AF_INET, &(ip->daddr), packet_details->dest_addr, INET_ADDRSTRLEN);
   packet_details->type = icmp->type;
@@ -189,6 +191,15 @@ void receive_icmp_packet(int sock_fd, struct icmp_packet *packet_details)
   free(packet);
 }
 
+void reply_icmp(int sock_fd, struct icmp_packet *packet_details)
+{
+    char tmp_addr[100] = {0};
+    memcpy(tmp_addr, packet_details->dest_addr, strlen(packet_details->dest_addr)+1);
+    memcpy(packet_details->dest_addr, packet_details->src_addr, strlen(packet_details->src_addr)+1);
+    memcpy(packet_details->src_addr, tmp_addr, strlen(tmp_addr)+1);
+    set_reply_type(packet_details);
+    send_icmp_packet(sock_fd, packet_details);
+}
 /**
  * Function to close the icmp socket
  */
@@ -230,7 +241,7 @@ uint16_t in_cksum(uint16_t *addr, int len)
 /**
  * Function to fill up common headers for IP and ICMP
  */
-void prepare_headers(struct iphdr *ip, struct icmphdr *icmp)
+void prepare_headers(struct iphdr *ip, struct icmphdr *icmp, uint16_t id, uint16_t seq)
 {
   ip->version = 4;
   ip->ihl = 5;
@@ -241,7 +252,8 @@ void prepare_headers(struct iphdr *ip, struct icmphdr *icmp)
   ip->protocol = IPPROTO_ICMP;
 
   icmp->code = 0;
-  icmp->un.echo.sequence = rand();
-  icmp->un.echo.id = rand();
+  //icmp->un.echo.sequence = seq?seq:rand();
+  icmp->un.echo.id = id?id:rand();
+  icmp->un.echo.sequence = seq;
   icmp->checksum = 0;   
 }

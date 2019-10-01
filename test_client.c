@@ -22,4 +22,5 @@ int main()
   send_icmp_packet(sock_fd, &packet);
 
   close_icmp_socket(sock_fd);
+  return 0;
 }

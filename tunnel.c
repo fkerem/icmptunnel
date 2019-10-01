@@ -150,14 +150,78 @@ void configure_network(int server)
   }
 }
 
+/**
+ * Function to handshake.
+ * identify server and client, to exchage client side's outgoing ip addess
+ * server: standby
+ * client: send a icmp echo, with payload=hash(*token)
+ * server: reply a icmp reply, with payload=hash(*token)
+ * server: modify dest as client's outgoing address
+ */
+void handshake(int sock_fd, char *dest, int server, char *token, char *client_addr) {
+    struct icmp_packet packet;
+    memset(&packet, 0, sizeof(packet));
+    strncpy(packet.src_addr, DEFAULT_ROUTE, sizeof(packet.src_addr));
+    strncpy(packet.dest_addr, dest, sizeof(packet.dest_addr));
 
+    printf("[DEBUG] Starting handshake is_server=%d\n", server);
+    if (!server) {
+        set_echo_type(&packet);
+        packet.payload = token;
+        packet.payload_size = strnlen(token,MTU);
+        printf("[DEBUG] Send handshake echo. addr = %s, token = %s\n", dest, token);
+        send_icmp_packet(sock_fd, &packet);
+
+        while (1) {
+            memset(&packet, 0, sizeof(struct icmp_packet));
+            receive_icmp_packet(sock_fd, &packet);
+            if ( strncmp(packet.src_addr,dest, sizeof(packet.src_addr)) != 0) {// ignore traffic 
+                printf("[DEBUG] Received handshake. addr = %s(should %s), token = %s\n",
+                        packet.src_addr, dest, packet.payload);
+                reply_icmp(sock_fd, &packet);
+                free(packet.payload);
+                continue;
+            }
+            if ( strncmp(packet.payload, token, strlen(token)) != 0) { //token mismatch
+                printf("[DEBUG] Received handshake. addr = %s, token = %s(should %s)\n",
+                        packet.src_addr, packet.payload, token);
+                reply_icmp(sock_fd, &packet);
+                free(packet.payload);
+                continue;
+            }
+            printf("[DEBUG] Received handshake. addr = %s, token = %s. Succ!\n",packet.src_addr, token);
+            free(packet.payload);
+            break;
+        }
+    } else {  // server mode
+        while (1) {
+            memset(&packet, 0, sizeof(packet));
+            receive_icmp_packet(sock_fd, &packet);
+            if ( strncmp(packet.payload, token, strlen(token)) != 0) { //token mismatch
+                printf("[DEBUG] Received handshake. addr = %s, token = %s(should %s)\n",packet.src_addr, packet.payload, token);
+                reply_icmp(sock_fd, &packet);
+                free(packet.payload);
+                continue;
+            }
+            printf("[DEBUG] Received handshake. addr = %s, token = %s. Succ! Reply it\n",packet.src_addr, token);
+            memcpy(client_addr, packet.src_addr, strlen(packet.src_addr)+1);
+
+            reply_icmp(sock_fd, &packet);
+            free(packet.payload);
+
+            break;
+        }
+    }
+}
 /**
  * Function to run the tunnel
  */
-void run_tunnel(char *dest, int server)
+void run_tunnel(char *dest, int server, char *token)
 {
   struct icmp_packet packet;
   int tun_fd, sock_fd;
+  char client_addr[100] = {0};
+  uint16_t icmp_id = 0;
 
   fd_set fs;
 
@@ -173,6 +237,9 @@ void run_tunnel(char *dest, int server)
   }
 
   configure_network(server);
+  handshake(sock_fd, dest, server, token, client_addr); // in server mode, client_addr will be filled with cliet's outgoing addr
+  if(server)
+      memcpy(dest, client_addr, strlen(client_addr)+1);
 
   while (1) {
     FD_ZERO(&fs);
@@ -181,13 +248,14 @@ void run_tunnel(char *dest, int server)
 
     select(tun_fd>sock_fd?tun_fd+1:sock_fd+1, &fs, NULL, NULL, NULL);
 
+    // tunnel package arrived, usually userspace app. (from virtual network)
     if (FD_ISSET(tun_fd, &fs)) {
       printf("[DEBUG] Data needs to be readed from tun device\n");
       // Reading data from tun device and sending ICMP packet
 
       printf("[DEBUG] Preparing ICMP packet to be sent\n");
       // Preparing ICMP packet to be sent
-      memset(&packet, 0, sizeof(struct icmp_packet));
+      memset(&packet, 0, sizeof(packet));
       printf("[DEBUG] Destination address: %s\n", dest);
 
       if (sizeof(DEFAULT_ROUTE) > sizeof(packet.src_addr)){
@@ -206,6 +274,7 @@ void run_tunnel(char *dest, int server)
       strncpy(packet.dest_addr, dest, strlen(dest) + 1);
 
       if(server) {
+        packet.id = icmp_id;
         set_reply_type(&packet);
       }
       else {
@@ -223,32 +292,42 @@ void run_tunnel(char *dest, int server)
         exit(EXIT_FAILURE);
       }
 
-      printf("[DEBUG] Sending ICMP packet with payload_size: %d, payload: %s\n", packet.payload_size, packet.payload);
+      printf("[DEBUG] Sending ICMP packet from %s to %s with payload_size: %d, payload: %s\n",
+              packet.src_addr, packet.dest_addr,  packet.payload_size, packet.payload);
       // Sending ICMP packet
       send_icmp_packet(sock_fd, &packet);
 
       free(packet.payload);
     }
 
+    // icmp package arrived. (from real network)
     if (FD_ISSET(sock_fd, &fs)) {
-      printf("[DEBUG] Received ICMP packet\n");
-      // Reading data from remote socket and sending to tun device
-
       // Getting ICMP packet
       memset(&packet, 0, sizeof(struct icmp_packet));
       receive_icmp_packet(sock_fd, &packet);
 
-      printf("[DEBUG] Read ICMP packet with src: %s, dest: %s, payload_size: %d, payload hdr_ver:IPv%d, payload: %s\n", packet.src_addr, packet.dest_addr, packet.payload_size, ((struct iphdr*)packet.payload)->version, packet.payload);
+      printf("[DEBUG] Read ICMP packet with id:%d, src: %s, dest: %s, payload_size: %d, payload hdr_ver:IPv%d, payload: %s\n",
+              ntohs(packet.id),  packet.src_addr, packet.dest_addr, packet.payload_size, ((struct iphdr*)packet.payload)->version, packet.payload);
+      if ((server && strncmp(packet.src_addr, client_addr, sizeof(client_addr))) || 
+              (!server && strncmp(packet.src_addr, dest, sizeof(packet.src_addr))) )// peer ip not match
+      {
+          printf("[WARN] illegal source : %s(should %s)\n", packet.src_addr, server?client_addr:dest);
+          //reply_icmp(sock_fd, &packet);
+          free(packet.payload);
+          continue;
+      }
       if (((struct iphdr*)packet.payload)->version != 4) { // not illegal ipv4 packet
           printf("[WARN] illegal packet version : ipv%d. should be 4 or 6\n", ((struct iphdr*)packet.payload)->version);
+          //reply_icmp(sock_fd, &packet);
           free(packet.payload);
           continue;
       }
       // Writing out to tun device
       tun_write(tun_fd, packet.payload, packet.payload_size);
 
-      printf("[DEBUG] Src address being copied: %s\n", packet.src_addr);
-      strncpy(dest, packet.src_addr, strlen(packet.src_addr) + 1);
+      //printf("[DEBUG] Src address being copied: %s\n", packet.src_addr);
+      //strncpy(dest, packet.src_addr, strlen(packet.src_addr) + 1);
+      icmp_id = packet.id;
       free(packet.payload);
     }
   }
