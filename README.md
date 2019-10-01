@@ -1,4 +1,4 @@
-# icmptunnel [![Build Status](https://travis-ci.org/DhavalKapil/icmptunnel.svg?branch=master)](https://travis-ci.org/DhavalKapil/icmptunnel)
+# icmptunnel [![Build Status](https://travis-ci.org/jack1582/icmptunnel.svg?branch=master)](https://travis-ci.org/jack1582/icmptunnel)
 
 > Transparently tunnel your IP traffic through ICMP echo and reply packets.
 
