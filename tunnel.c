@@ -106,8 +106,16 @@ int tun_write(int tun_fd, char *buffer, int length)
  */
 void configure_network(int server, char *script_path)
 {
+
   int pid, status;
   char *const args[] = {script_path, NULL};
+
+  if(server) {
+    printf("[DEBUG] Configuring the network for a SERVER\n");
+  }
+  else {
+    printf("[DEBUG] Configuring the network for a CLIENT\n");
+  }
 
   pid = fork();
 
