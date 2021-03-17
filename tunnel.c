@@ -216,7 +216,7 @@ void handshake(int sock_fd, char *dest, int server, char *token, char *client_ad
 /**
  * Function to run the tunnel
  */
-void run_tunnel(char *dest, int server, char *token)
+void run_tunnel(char *dest, int server, char *token, char *tun_interface)
 {
   struct icmp_packet packet;
   int tun_fd, sock_fd;
@@ -225,7 +225,8 @@ void run_tunnel(char *dest, int server, char *token)
 
   fd_set fs;
 
-  tun_fd = tun_alloc("tun0", IFF_TUN | IFF_NO_PI);
+  tun_fd = tun_alloc(tun_interface, IFF_TUN | IFF_NO_PI);
+  printf("[DEBUG] Allocated the tunnel interface = %s\n", tun_interface);
 
   printf("[DEBUG] Starting tunnel - Dest: %s, Server: %d\n", dest, server);
   printf("[DEBUG] Opening ICMP socket\n");
