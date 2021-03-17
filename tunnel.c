@@ -104,26 +104,10 @@ int tun_write(int tun_fd, char *buffer, int length)
 /**
  * Function to configure the network
  */
-void configure_network(int server)
+void configure_network(int server, char *script_path)
 {
   int pid, status;
-  char path[100];
-  char *const args[] = {path, NULL};
-
-  if (server) {
-    if (sizeof(SERVER_SCRIPT) > sizeof(path)){
-      perror("Server script path is too long\n");
-      exit(EXIT_FAILURE);
-    }
-    strncpy(path, SERVER_SCRIPT, strlen(SERVER_SCRIPT) + 1);
-  }
-  else {
-    if (sizeof(CLIENT_SCRIPT) > sizeof(path)){
-      perror("Client script path is too long\n");
-      exit(EXIT_FAILURE);
-    }
-    strncpy(path, CLIENT_SCRIPT, strlen(CLIENT_SCRIPT) + 1);
-  }
+  char *const args[] = {script_path, NULL};
 
   pid = fork();
 
@@ -134,14 +118,14 @@ void configure_network(int server)
   
   if (pid==0) {
     // Child process, run the script
-    exit(execv(path, args));
+    exit(execv(script_path, args));
   }
   else {
     // Parent process
     waitpid(pid, &status, 0);
     if (WEXITSTATUS(status) == 0) {
       // Script executed correctly
-      printf("[DEBUG] Script ran successfully\n");
+      printf("[DEBUG] Script = %s ran successfully\n", script_path);
     }
     else {
       // Some error
@@ -216,7 +200,7 @@ void handshake(int sock_fd, char *dest, int server, char *token, char *client_ad
 /**
  * Function to run the tunnel
  */
-void run_tunnel(char *dest, int server, char *token, char *tun_interface)
+void run_tunnel(char *dest, int server, char *token, char *tun_interface, char *script_path)
 {
   struct icmp_packet packet;
   int tun_fd, sock_fd;
@@ -237,7 +221,7 @@ void run_tunnel(char *dest, int server, char *token, char *tun_interface)
     bind_icmp_socket(sock_fd);
   }
 
-  configure_network(server);
+  configure_network(server, script_path);
   handshake(sock_fd, dest, server, token, client_addr); // in server mode, client_addr will be filled with cliet's outgoing addr
   if(server)
       memcpy(dest, client_addr, strlen(client_addr)+1);

@@ -5,9 +5,6 @@
 #ifndef tunnel_gaurd
 #define tunnel_gaurd
 
-#define SERVER_SCRIPT "server.sh"
-#define CLIENT_SCRIPT "client.sh"
-
 /**
  * Function to allocate a tunnel
  */
