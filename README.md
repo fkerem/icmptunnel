@@ -2,6 +2,55 @@
 
 > Transparently tunnel your IP traffic through ICMP echo and reply packets.
 
+## changelog
+
+Updated for multiple clients.
+Different `tunX` interfaces can be generated.
+Supports multiple clients and servers with different tokens.
+Edit `server.sh` and `client.sh` files accordingly.
+Each each tunnel interface requires to generate another `serverX.sh`.
+
+### Server Side
+
+  ```
+  git clone https://github.com/fkerem/icmptunnel.git
+  cd icmptunnel
+  make
+  ```
+  Before proceeding to the commands below,
+  edit `server.sh` or generate new `serverX.sh` scripts for each client.
+  
+  ```
+  sudo ./icmptunnel -s server.sh tun0 1.0.1.1 "token-string-here"
+  
+  ```
+
+### Client Side
+  ```
+  git clone https://github.com/fkerem/icmptunnel.git
+  cd icmptunnel
+  make
+  ```
+  Before proceeding to the commands below, edit `client.sh`.
+  `route -n` to get the gateway addr.
+  
+  ```
+  ./icmptunnel -c client.sh tun0 <public_server_IP> "token-string-here"
+  ```
+
+### Usage
+
+  ```
+  usage: icmptunnel <-s|-c> serverip token tun-interface
+    -s: server mode
+    -c: client mode
+  script_path: server or client bash script to run for network configurations < 100 Bytes
+  tunnel interface to be created: tun0, tun1, ... < 10 bytes
+  serverip: the server side internet ip address. in server mode, can be 0.0.0.0
+  token: to identify client and server, and match them. len(token) < 128 Bytes
+  ```
+
+
 ## changelog (history detail in changelog)
 ### 20191001
 * 增加handshake握手机制，确保两个peer之间通信不受其他包的干扰
