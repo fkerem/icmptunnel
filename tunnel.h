@@ -23,6 +23,6 @@ int tun_write(int tun_fd, char *buffer, int length);
 /**
  * Function to run the tunnel
  */
-void run_tunnel(char *dest, int server, char *token);
+void run_tunnel(char *dest, int server, char *token, char *tun_interface, char *script_path);
 
 #endif
