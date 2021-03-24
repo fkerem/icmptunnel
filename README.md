@@ -21,7 +21,7 @@ Each each tunnel interface requires to generate another `serverX.sh`.
   edit `server.sh` or generate new `serverX.sh` scripts for each client.
   
   ```
-  sudo ./icmptunnel -s server.sh tun0 1.0.1.1 "token-string-here"
+  sudo ./icmptunnel -s server.sh tun0 10.0.1.1 "token-string-here"
   
   ```
 
